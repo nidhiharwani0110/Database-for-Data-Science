@@ -1,0 +1,147 @@
+-- Input Data Enrichment
+update SpaceFlightData
+set PresNumeric = CASE
+                      When Pressure = 'High' THEN 1
+                      When Pressure = 'Low' THEN 0
+    END
+
+
+CREATE or ALTER PROCEDURE usp_knn(@temperature as FLOAT, @pressure as nvarchar(MAX), @nn as int)
+AS
+BEGIN
+    --     Normalize Temp and pressure
+    DECLARE
+        @avgTemp as FLOAT, @stdTemp as FLOAT, @avgPres as FLOAT, @stdPres as FLOAT, @tempIp as FLOAT, @presIp as FLOAT
+
+    select @avgTemp = AVG(LaunchTemperature), @stdTemp = STDEVP(LaunchTemperature) from SpaceFlightData
+    select @avgPres = AVG(PresNumeric), @stdPres = STDEVP(PresNumeric) from SpaceFlightData
+
+    drop table if exists NormVals
+    select ((LaunchTemperature - @avgTemp) / @stdTemp) as NormTemp, ((PresNumeric - @avgPres) / @stdPres) as NormPres
+    into NormVals
+    from SpaceFlightData
+
+--     Normalize Input
+    select @tempIp = ((@temperature - @avgTemp) / @stdTemp),
+           @presIp = ((CASE
+                           When @pressure = 'High' THEN 1
+                           When @pressure = 'Low' THEN 0
+                           END
+               - @avgPres) / @stdPres)
+
+--     Cluster
+    select Top (@nn) *, sqrt(power(LaunchTemperature - @tempIp, 2) + power(PresNumeric - @presIp, 2)) as distance
+    from SpaceFlightData
+    order by distance ASC
+--     Predict
+    drop table if exists NormVals
+END
+
+
+EXEC usp_knn 47.23, 'High', 3
+
+
+-- K-Means
+
+CREATE or ALTER PROCEDURE usp_kmeans(@temperature as FLOAT, @pressure as nvarchar(MAX), @nn as int)
+AS
+BEGIN
+	drop table if exists Centroids
+	create table Centroids
+	(
+		c_id     int IDENTITY (1,1),
+		Temp     float,
+		Pressure float
+	)
+
+	DECLARE
+		@avgTemp as FLOAT, @stdTemp as FLOAT, @avgPres as FLOAT, @stdPres as FLOAT, @error as FLOAT, @prev_error as FLOAT
+
+	select @avgTemp = AVG(LaunchTemperature), @stdTemp = STDEVP(LaunchTemperature) from SpaceFlightData
+	select @avgPres = AVG(PresNumeric), @stdPres = STDEVP(PresNumeric) from SpaceFlightData
+
+	insert into Centroids(Temp, Pressure)
+	select Top (@nn) ((LaunchTemperature - @avgTemp) / @stdTemp), ((PresNumeric - @avgPres) / @stdPres)
+	from SpaceFlightData
+
+	drop table if exists NormVals
+	select ((LaunchTemperature - @avgTemp) / @stdTemp) as NormTemp,
+		   ((PresNumeric - @avgPres) / @stdPres)       as NormPres,
+		   1                                           as c_id,
+		   s_id                                        as s_id
+	into NormVals
+	from SpaceFlightData
+
+	select @prev_error = sum(power(n.NormTemp - c.Temp, 2) + power(n.NormPres - c.Pressure, 2))
+	from NormVals as n
+			 join Centroids as c
+				  on n.c_id = c.c_id
+
+	print @prev_error
+
+
+	DECLARE
+		@cnt INT = 1, @total_rows as INT, @tempT as FLOAT, @tempP as FLOAT;
+	select @total_rows = count(*) from NormVals
+
+	set @error = 0
+	DECLARE
+		@max_iter as int, @iter as int
+	set @max_iter = 10
+	set @iter = 0
+
+	WHILE abs(@prev_error - @error) > 5 AND @max_iter > @iter
+	BEGIN
+
+		set @prev_error = @error
+
+		WHILE @cnt <= @total_rows
+		BEGIN
+
+			select @tempT = NormTemp from NormVals where s_id = @cnt
+			select @tempP = NormPres from NormVals where s_id = @cnt
+
+			update NormVals
+			set c_id = (select Top 1 c_id
+						from Centroids as c1
+						where power(@tempT - c1.Temp, 2) + power(@tempP - c1.Pressure, 2) = (
+							select MIN(power(@tempT - c2.Temp, 2) + power(@tempP - c2.Pressure, 2))
+							from Centroids as c2
+						))
+			where s_id = @cnt
+
+			SET @cnt = @cnt + 1;
+		END;
+
+		set @cnt = 1
+		WHILE @cnt <= @nn
+		BEGIN
+			update Centroids
+			set Temp = (select avg(NormTemp) from NormVals where c_id = @cnt)
+			where c_id = @cnt
+
+			update Centroids
+			set Pressure = (select avg(NormPres) from NormVals where c_id = @cnt)
+			where c_id = @cnt
+
+			set @cnt = @cnt + 1
+		END
+		select @error = sum(power(n.NormTemp - c.Temp, 2) + power(n.NormPres - c.Pressure, 2))
+		from NormVals as n
+				 join Centroids as c
+					  on n.c_id = c.c_id
+
+		print @error
+		set @iter = @iter + 1
+	END
+
+	select s.O_Ring_Failure, s.LaunchTemperature, s.Pressure, n.c_id
+		from SpaceFlightData as s
+		join NormVals as n
+		on s.s_id = n.s_id
+
+--     drop table NormVals
+END
+
+
+EXEC usp_kmeans 47.2, 'High', 3

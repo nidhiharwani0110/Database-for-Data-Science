@@ -1,0 +1,265 @@
+-- Part 1 : Query 1 to 9
+create database CS527
+
+-- Part 1 : Query 9
+ALTER TABLE Seasons
+ADD CONSTRAINT Seasons_PK PRIMARY KEY CLUSTERED (Season)
+
+ALTER TABLE Teams
+ADD CONSTRAINT Teams_PK PRIMARY KEY CLUSTERED (TeamID);
+
+alter table TeamCoaches add constraint TeamCoaches_Teams_TeamID_fk foreign key (TeamID) references Teams(TeamID)
+alter table TeamCoaches add constraint TeamCoaches_Seasons_Season_fk foreign key (Season) references Seasons(Season)
+
+alter table RegularSeasonDetailedResults add constraint RegularSeasonDetailedResults_Seasons_Season_fk foreign key (Season) references Seasons(Season)
+alter table RegularSeasonDetailedResults add constraint RegularSeasonDetailedResults_Teams_TeamID_fk foreign key (WTeamID) references Teams(TeamID)
+alter table RegularSeasonDetailedResults add constraint RegularSeasonDetailedResults_Teams_TeamID_fk_2 foreign key (LTeamID) references Teams(TeamID)
+
+alter table RegularSeasonCompactResults add constraint RegularSeasonCompactResults_Seasons_Season_fk foreign key (Season) references Seasons(Season)
+alter table RegularSeasonCompactResults add constraint RegularSeasonDetailedResults_Teams_TeamID_fk_2 foreign key (WTeamID) references Teams(TeamID)
+alter table RegularSeasonCompactResults add constraint RegularSeasonDetailedResults_Teams_TeamID_fk_2 foreign key (LTeamID) references Teams(TeamID)
+
+alter table NCAATourneyDetailedResults add constraint NCAATourneyDetailedResults_Seasons_Season_fk foreign key (Season) references Seasons(Season)
+alter table NCAATourneyDetailedResults add constraint NCAATourneyDetailedResults_Teams_TeamID_fk foreign key (WTeamID) references Teams(TeamID)
+alter table NCAATourneyDetailedResults add constraint NCAATourneyDetailedResults_Teams_TeamID_fk_2 foreign key (LTeamID) references Teams(TeamID)
+
+alter table NCAATourneyCompactResults add constraint NCAATourneyCompactResults_Seasons_Season_fk foreign key (Season) references Seasons(Season)
+alter table NCAATourneyCompactResults add constraint NCAATourneyCompactResults_Teams_TeamID_fk foreign key (WTeamID) references Teams(TeamID)
+alter table NCAATourneyCompactResults add constraint NCAATourneyCompactResults_Teams_TeamID_fk_2 foreign key (LTeamID) references Teams(TeamID)
+
+
+-- Part 1 : Query 10 to 13
+    -- Creating Views Required for Joining
+
+create view WTeams as
+select TeamID as WTeamID, TeamName as WTeamName, FirstD1Season as WFirstD1Season, LastD1Season as WLastD1Season
+from Teams
+
+create view LTeams as
+select TeamID as LTeamID, TeamName as LTeamName, FirstD1Season as LFirstD1Season, LastD1Season as LLastD1Season
+from Teams
+
+create view WTeamCoaches as
+select Season      as WSeason,
+       TeamID      as WTeamID,
+       FirstDayNum as WFirstDayNum,
+       LastDayNum  as WLastDayNum,
+       CoachName   as WCoachName
+from TeamCoaches;
+
+create view LTeamCoaches as
+select Season      as LSeason,
+       TeamID      as LTeamID,
+       FirstDayNum as LFirstDayNum,
+       LastDayNum  as LLastDayNum,
+       CoachName   as LCoachName
+from TeamCoaches;
+
+
+create view vw_Fact_Table_Tourney_Compact as
+select coalesce(NTCR.Season, S.Season, WTC.WSeason, LTC.LSeason) as Season, DayNum, coalesce(NTCR.WTeamID, WT.WTeamID, WTC.WTeamID) as WTeamID,WScore, coalesce(NTCR.LTeamID, LT.LTeamID, LTC.LTeamID) as LTeamID, LScore,WLoc,NumOT,WTeamName,WFirstD1Season,WLastD1Season,LTeamName,LFirstD1Season,LLastD1Season ,DayZero,RegionW,RegionX,RegionY,RegionZ,WSeason,WFirstDayNum,WLastDayNum,WCoachName,LSeason,LFirstDayNum,LLastDayNum,LCoachName
+from NCAATourneyCompactResults as NTCR
+         join WTeams WT
+              on NTCR.WTeamID = WT.WTeamID
+         join LTeams LT
+              on NTCR.LTeamID = LT.LTeamID
+         join Seasons S
+              on NTCR.Season = S.Season
+         join WTeamCoaches WTC
+              on NTCR.WTeamID = WTC.WTeamID and
+                 NTCR.Season = WTC.WSeason
+         join LTeamCoaches LTC
+              on NTCR.LTeamID = LTC.LTeamID and
+                 NTCR.Season = LTC.LSeason
+
+
+create view vw_Fact_Table_Tourney_Detailed as
+select coalesce(NTDR.Season, S.Season, WTC.WSeason, LTC.LSeason) as Season,DayNum,coalesce(NTDR.WTeamID, WT.WTeamID, WTC.WTeamID)as WTeamID,WScore, coalesce(NTDR.LTeamID, LT.LTeamID, LTC.LTeamID)as LTeamID,LScore,WLoc,NumOT,WFGM,WFGA,WFGM3,WFGA3,WFTM,WFTA,WOR,WDR,WAst,WTO,WStl,WBlk,WPF,LFGM,LFGA,LFGM3,LFGA3,LFTM,LFTA,LOR,LDR,LAst,LTO,LStl,LBlk,LPF,WTeamName,WFirstD1Season,WLastD1Season,LTeamName,LFirstD1Season,LLastD1Season,DayZero,RegionW,RegionX,RegionY,RegionZ,WSeason,WFirstDayNum,WLastDayNum,WCoachName,LSeason,LFirstDayNum,LLastDayNum,LCoachName
+from NCAATourneyDetailedResults as NTDR
+         join WTeams WT
+              on NTDR.WTeamID = WT.WTeamID
+         join LTeams LT
+              on NTDR.LTeamID = LT.LTeamID
+         join Seasons S
+              on NTDR.Season = S.Season
+         join WTeamCoaches WTC
+              on NTDR.WTeamID = WTC.WTeamID and
+                 NTDR.Season = WTC.WSeason
+         join LTeamCoaches LTC
+              on NTDR.LTeamID = LTC.LTeamID and
+                 NTDR.Season = LTC.LSeason
+
+create view vw_Fact_Table_Regular_Compact as
+select coalesce(RSCR.Season, S.Season, WTC.WSeason, LTC.LSeason) as Season,DayNum, coalesce(RSCR.WTeamID, WT.WTeamID, WTC.WTeamID) as WTeamID,WScore,coalesce(RSCR.LTeamID, LT.LTeamID, LTC.LTeamID) as LTeamID,LScore,WLoc,NumOT,WTeamName,WFirstD1Season,WLastD1Season,LTeamName,LFirstD1Season,LLastD1Season,DayZero,RegionW,RegionX,RegionY,RegionZ,WSeason,WFirstDayNum,WLastDayNum,WCoachName,LSeason,LFirstDayNum,LLastDayNum,LCoachName
+from RegularSeasonCompactResults as RSCR
+         join WTeams WT
+              on RSCR.WTeamID = WT.WTeamID
+         join LTeams LT
+              on RSCR.LTeamID = LT.LTeamID
+         join Seasons S
+              on RSCR.Season = S.Season
+         join WTeamCoaches WTC
+              on RSCR.WTeamID = WTC.WTeamID and
+                 RSCR.Season = WTC.WSeason
+         join LTeamCoaches LTC
+              on RSCR.LTeamID = LTC.LTeamID and
+                 RSCR.Season = LTC.LSeason
+
+create view vw_Fact_Table_Regular_Detailed as
+select coalesce(RSDR.Season, S.Season, WTC.WSeason, LTC.LSeason) as Season,DayNum,coalesce(RSDR.WTeamID, WT.WTeamID, WTC.WTeamID) as WTeamID,WScore,coalesce(RSDR.LTeamID, LT.LTeamID, LTC.LTeamID) as LTeamID,LScore,WLoc,NumOT,WFGM,WFGA,WFGM3,WFGA3,WFTM,WFTA,WOR,WDR,WAst,WTO,WStl,WBlk,WPF,LFGM,LFGA,LFGM3,LFGA3,LFTM,LFTA,LOR,LDR,LAst,LTO,LStl,LBlk,LPF,WTeamName,WFirstD1Season,WLastD1Season,LTeamName,LFirstD1Season,LLastD1Season,DayZero,RegionW,RegionX,RegionY,RegionZ,WSeason,WFirstDayNum,WLastDayNum,WCoachName,LSeason,LFirstDayNum,LLastDayNum,LCoachName
+from RegularSeasonDetailedResults as RSDR
+         join WTeams WT
+              on RSDR.WTeamID = WT.WTeamID
+         join LTeams LT
+              on RSDR.LTeamID = LT.LTeamID
+         join Seasons S
+              on RSDR.Season = S.Season
+         join WTeamCoaches WTC
+              on RSDR.WTeamID = WTC.WTeamID and
+                 RSDR.Season = WTC.WSeason
+         join LTeamCoaches LTC
+              on RSDR.LTeamID = LTC.LTeamID and
+                 RSDR.Season = LTC.LSeason
+
+-- Part 1 : Query 14 to 17
+
+select *
+into Fact_Table_Tourney_Compact
+from vw_Fact_Table_Tourney_Compact
+
+select *
+into Fact_Table_Tourney_Detailed
+from vw_Fact_Table_Tourney_Detailed
+
+select *
+into Fact_Table_Regular_Compact
+from vw_Fact_Table_Regular_Compact
+
+select *
+into Fact_Table_Regular_Detailed
+from vw_Fact_Table_Regular_Detailed
+
+-- Part 1 : Query 18
+CREATE PROCEDURE sp_FactTableTeam @FactTableName nvarchar(30), @TeamID varchar(20)
+AS
+    DECLARE @sql as nvarchar(MAX)
+    SELECT @sql = 'SELECT * FROM ' + @FactTableName + ' WHERE WTeamID = ' + @TeamID + ' OR LTeamID = ' + @TeamID + ';'
+    EXEC(@sql)
+GO;
+
+
+EXEC sp_FactTableTeam 'Fact_Table_Regular_Compact', '1102';
+
+
+-- Part 1 : Query 19
+
+CREATE OR ALTER FUNCTION fn_GameResult
+    (@TeamNameA as nvarchar(MAX), @TeamNameB as nvarchar(MAX))
+RETURNS varchar(MAX)
+AS
+BEGIN
+    DECLARE @WTA as FLOAT, @WTAC as INT, @LTA as FLOAT, @LTAC as INT, @WTB as FLOAT, @WTBC as INT, @LTB as FLOAT, @LTBC as INT, @TeamAScore as FLOAT, @TeamBScore as FLOAT
+    DECLARE @M1 as int, @M2 as int;
+    select @M1 = count(*), @WTA = sum(WScore), @LTB = sum(LScore) from Fact_Table_Regular_Compact where CONVERT(VARCHAR, WTeamName) = @TeamNameA and CONVERT(VARCHAR, LTeamName) = @TeamNameB
+    select @M2 = count(*), @WTB = sum(WScore), @LTA = sum(LScore) from Fact_Table_Regular_Compact where CONVERT(VARCHAR, WTeamName) = @TeamNameB and CONVERT(VARCHAR, LTeamName) = @TeamNameA
+
+    IF (@M1 + @M2) < 1
+        BEGIN
+            SELECT @WTA = SUM(WScore), @WTAC = count(*)
+                from  Fact_Table_Regular_Compact
+                where CONVERT(VARCHAR, WTeamName) = @TeamNameA
+
+            SELECT @LTA = SUM(LScore), @LTAC = count(*)
+                from  Fact_Table_Regular_Compact
+                where CONVERT(VARCHAR, LTeamName) = @TeamNameA
+
+            SELECT @WTB = SUM(WScore)/count(*), @WTBC = count(*)
+                from  Fact_Table_Regular_Compact
+                where CONVERT(VARCHAR, WTeamName) = @TeamNameB
+
+            SELECT @LTB = SUM(LScore), @LTBC = count(*)
+                from  Fact_Table_Regular_Compact
+                where CONVERT(VARCHAR, LTeamName) = @TeamNameB
+
+            SET @TeamAScore = (@WTA + @LTA)/(@WTAC + @LTAC)
+            SET @TeamBScore = (@WTB + @LTB)/(@WTBC + @LTBC)
+        END
+    ELSE
+        BEGIN
+            SET @TeamAScore = (@WTA + @LTA)/(@M1 + @M2)
+            SET @TeamBScore = (@WTB + @LTB)/(@M1 + @M2)
+        END
+    RETURN 'TeamA Score: ' + convert(VARCHAR, @TeamAScore) + '    TeamB Score: ' + convert(VARCHAR, @TeamBScore);
+END
+GO
+
+
+begin
+-- 	declare @TeamNameA nvarchar(max) = 'Winthrop'
+-- 	declare @TeamNameB nvarchar(max) = 'Temple'
+    declare @TeamNameA nvarchar(max) = 'Oklahoma'
+	declare @TeamNameB nvarchar(max) = 'Illinois'
+	declare @result varchar(MAX)
+	exec
+		@result = fn_GameResult
+			@TeamNameA,
+			@TeamNameB
+	select @result as result
+end
+
+-- Part 2 : Query 1
+-- PIVOT
+
+select *
+        into NCAA_Pivot
+    from (SELECT WTeamName,
+                 [2015],
+                 [2016],
+                 [2017],
+                 [2018]
+          FROM (SELECT convert(VARCHAR, WTeamName) as WTeamName, Season, WScore FROM Fact_Table_Tourney_Detailed) AS p
+                   PIVOT
+                   (AVG(WScore) FOR Season IN ([2015],[2016],[2017],[2018])) AS pvt
+          WHERE WTeamName in ('VIRGINIA', 'AUBURN', 'Texas Tech', 'Michigan St')
+         ) as Pikachu
+
+-- Part 2 : Query 3
+--     Slicing
+SELECT * FROM NCAA_Pivot WHERE WTeamName = 'Michigan St';
+--     Dicing
+SELECT WTeamName, SUM([2015]) FROM NCAA_Pivot WHERE WTeamName = 'Michigan St' GROUP BY WTeamName;
+
+    
+-- Part 2 : Query 4
+
+select Season, WTeamID, SUM(WScore) as SUM_CUBE
+from Fact_Table_Tourney_Detailed
+GROUP BY CUBE (Season, WTeamID)
+order by Season, WTeamID
+
+select Season, WTeamID, SUM(WScore) as SUM_ROLLUP
+from Fact_Table_Tourney_Detailed
+GROUP BY ROLLUP (Season, WTeamID)
+order by Season, WTeamID
+
+select Season, WTeamID, SUM(WScore) as SUM_ROLLUP
+from Fact_Table_Tourney_Detailed
+GROUP BY GROUPING SETS (Season, WTeamID)
+order by Season, WTeamID
+
+
+-- Part 2 : Query 5
+
+select Season, WTeamID, WTeamName, WScore as Score, RANK() OVER (ORDER BY WScore ASC) as RANK_Score,
+       DENSE_RANK() OVER (ORDER BY WScore ASC) as DENSE_RANK_Score,
+       PERCENT_RANK() OVER (ORDER BY WScore ASC) as PERCENT_RANK_Score,
+       CUME_DIST() OVER (ORDER BY WScore ASC) as CUME_DIST_Score
+FROM Fact_Table_Tourney_Detailed
+
+-- Part 2 : Query 6
+
+SELECT WTeamID, WTeamName, Season, WScore, AVG(convert(FLOAT,WScore)) over ( PARTITION BY WTeamID ORDER BY Season ROWS BETWEEN 2 PRECEDING AND 2 FOLLOWING) as WScore_AVG
+FROM Fact_Table_Tourney_Detailed
+ORDER BY WTeamID, Season, WScore_AVG
+
+
